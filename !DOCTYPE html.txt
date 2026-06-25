@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSC Agri Card Maker - Pro</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+
+    <style>
+        body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 20px; display: flex; gap: 20px; }
+        .form-container { width: 35%; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); max-height: 90vh; overflow-y: auto; }
+        .preview-container { width: 65%; display: flex; flex-direction: column; gap: 20px; align-items: center; }
+        .input-group { margin-bottom: 12px; }
+        .input-group label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 14px; }
+        .input-group input, .input-group select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        
+        /* PVC Card Styling */
+        .id-card { width: 450px; height: 285px; background: #fff; border-radius: 12px; overflow: hidden; position: relative; border: 1px solid #ccc; box-shadow: 0 4px 10px rgba(0,0,0,0.15); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        /* Background Hacks (कृषक और धान का चित्र वाटरमार्क) */
+        .front-bg {
+            /* हल चलाते हुए किसान की इमेज (Opacity 0.8 के साथ ताकि टेक्स्ट साफ़ दिखे) */
+            background-image: linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8)), url('https://images.unsplash.com/photo-1592982537447-6f233c77f0d2?auto=format&fit=crop&w=600&q=80');
+            background-repeat: no-repeat; 
+            background-position: center; 
+            background-size: cover;
+        }
+        .dhan-icon {
+            position: absolute; bottom: 25px; right: 10px; width: 35px; height: 35px; opacity: 0.6;
+            background-image: url('https://img.icons8.com/color/96/wheat.png'); /* धान/गेहूं का छोटा चित्र */
+            background-size: contain; background-repeat: no-repeat;
+        }
+
+        .card-header { background: linear-gradient(135deg, #1b5e20, #4caf50); color: white; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; }
+        .card-header h3 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
+        .card-header .logo { font-size: 16px; font-weight: bold; color: #ffeb3b; }
+
+        .card-body-front { padding: 12px; display: flex; gap: 15px; height: calc(100% - 75px); position: relative; z-index: 1; }
+        .photo-box { width: 105px; height: 130px; border: 2px solid #4caf50; border-radius: 6px; background: #f9f9f9; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .photo-box img { width: 100%; height: 100%; object-fit: cover; }
+        .details-box { flex: 1; font-size: 13px; color: #111; line-height: 1.6; }
+        .details-box p { margin: 3px 0; font-weight: 500; }
+        .details-box strong { color: #1b5e20; font-weight: 700; }
+        
+        .qr-box { width: 85px; height: 85px; position: absolute; right: 12px; bottom: 12px; display: flex; align-items: center; justify-content: center; background: #fff; padding: 5px; border-radius: 4px; box-shadow: 0 0 5px rgba(0,0,0,0.2); }
+        
+        /* नया बड़ा Farmer ID बॉक्स (नीचे की तरफ) */
+        .farmer-id-box {
+            position: absolute; 
+            bottom: 12px; 
+            left: 12px; 
+            background: #fff; 
+            padding: 6px 12px; 
+            border-left: 5px solid #ff5722; 
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            font-size: 15px; 
+            font-weight: bold; 
+            color: #333;
+        }
+        .farmer-id-box span { color: #ff5722; font-size: 17px; margin-left: 5px; }
+
+        /* Back Card */
+        .card-body-back { padding: 12px; font-size: 12px; height: calc(100% - 75px); display: flex; flex-direction: column; justify-content: space-between; position: relative; z-index: 1; }
+        .address-section { margin-bottom: 8px; border-bottom: 1px dashed #777; padding-bottom: 5px; font-size: 13px; font-weight: 500;}
+        
+        /* ज़मीन विवरण के लिए क्रॉप की हुई इमेज बॉक्स */
+        .cropped-land-box { width: 100%; height: 110px; border: 1px solid #4caf50; display: flex; align-items: center; justify-content: center; background: rgba(250,250,250,0.9); overflow: hidden; }
+        .cropped-land-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+        .card-footer { position: absolute; bottom: 0; width: 100%; background: #1b5e20; color: white; text-align: center; padding: 5px 0; font-size: 10px; font-weight: bold; }
+        .btn-download { background: #ff5722; color: white; border: none; padding: 12px 25px; font-size: 16px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        
+        /* Modal Style for Cropping */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 20px; border-radius: 8px; max-width: 500px; width: 90%; text-align: center; }
+        .crop-area { max-height: 350px; margin-bottom: 15px; overflow: hidden; }
+        .crop-area img { max-width: 100%; }
+        .btn-crop { background: #4caf50; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="form-container">
+    <h2>किसान कार्ड डेटा एंट्री</h2>
+    <hr>
+    <div class="input-group"><label>किसान का नाम:</label><input type="text" id="inName" value="सती कुमारी (Sita Kumari)" oninput="updateCard()"></div>
+    <div class="input-group"><label>जन्म तिथि:</label><input type="text" id="inDob" value="01/01/1920" oninput="updateCard()"></div>
+    <div class="input-group"><label>लिंग (Gender):</label><input type="text" id="inGender" value="Female" oninput="updateCard()"></div>
+    <div class="input-group"><label>मोबाइल नंबर:</label><input type="text" id="inMobile" value="8700353999" oninput="updateCard()"></div>
+    <div class="input-group"><label>आधार नंबर:</label><input type="text" id="inAadhar" value="[Aadhaar Redacted]" oninput="updateCard()"></div>
+    <div class="input-group"><label>Farmer ID:</label><input type="text" id="inFarmerId" value="F-XX00X0XX00" oninput="updateCard()"></div>
+    <div class="input-group"><label>पूरा पता (Address):</label><input type="text" id="inAddress" value="Bihar, India" oninput="updateCard()"></div>
+    
+    <hr>
+    <div class="input-group">
+        <label style="color: #1b5e20;">📄 PDF फाइल अपलोड करें (फोटो/खेत विवरण के लिए):</label>
+        <input type="file" id="pdfFile" accept="application/pdf" onchange="processPDF(event)">
+    </div>
+    
+    <div class="input-group">
+        <button type="button" class="btn-crop" onclick="openCropModal('photo')" style="background: #0288d1; width: 100%; margin-bottom: 5px;">1. PDF से फोटो क्रॉप करें</button>
+        <button type="button" class="btn-crop" onclick="openCropModal('land')" style="background: #0288d1; width: 100%;">2. PDF से खेत विवरण क्रॉप करें</button>
+    </div>
+</div>
+
+<div class="preview-container">
+    <h2>कार्ड लाइव प्रीव्यू (PVC Size)</h2>
+    
+    <div class="id-card front-bg" id="frontCard">
+        <div class="card-header">
+            <span class="logo">Agri Card</span>
+            <h3>मेरा किसान कार्ड</h3>
+        </div>
+        <div class="card-body-front">
+            <div class="photo-box">
+                <img id="cardPhoto" src="https://via.placeholder.com/105x130?text=Photo" alt="Farmer Photo">
+            </div>
+            <div class="details-box">
+                <p><strong>नाम:</strong> <span id="cardName">सती कुमारी (Sita Kumari)</span></p>
+                <p><strong>जन्मतिथि:</strong> <span id="cardDob">01/01/1920</span></p>
+                <p><strong>लिंग:</strong> <span id="cardGender">Female</span></p>
+                <p><strong>मोबाइल:</strong> <span id="cardMobile">8700353999</span></p>
+                <p><strong>आधार No:</strong> <span id="cardAadhar">[Aadhaar Redacted]</span></p>
+            </div>
+            
+            <!-- Farmer ID को नीचे सेट किया गया है -->
+            <div class="farmer-id-box">
+                FARMER ID: <span id="cardFarmerId">F-XX00X0XX00</span>
+            </div>
+            
+            <div class="qr-box" id="cardQr"></div>
+        </div>
+        <div class="dhan-icon"></div>
+        <div class="card-footer">THIS CARD IS ONLY FOR PERSONAL USE NOT FOR GOVT. ISSUE CARD</div>
+    </div>
+
+    <div class="id-card front-bg" id="backCard">
+        <div class="card-header">
+            <span class="logo">Agri Card</span>
+            <h3>भूमि एवं पता विवरण</h3>
+        </div>
+        <div class="card-body-back">
+            <div class="address-section">
+                <strong>पता:</strong> <span id="cardAddress">Bihar, India</span>
+            </div>
+            
+            <div class="cropped-land-box">
+                <img id="cardLandDetails" src="https://via.placeholder.com/400x110?text=Cropped+Land+Details+Will+Appear+Here" alt="Land Details">
+            </div>
+            <div style="height: 15px;"></div>
+        </div>
+        <div class="dhan-icon"></div>
+        <div class="card-footer">FARMER I-CARD (CSC SERVICES)</div>
+    </div>
+
+    <button class="btn-download" onclick="downloadBothSides()">Download Card Images (HD)</button>
+</div>
+
+<div class="modal" id="cropModal">
+    <div class="modal-content">
+        <h3>इमेज क्रॉप करें</h3>
+        <div class="crop-area">
+            <img id="imageToCrop" src="" alt="To Crop">
+        </div>
+        <button class="btn-crop" onclick="saveCrop()">क्रॉप सुरक्षित करें</button>
+        <button class="btn-crop" onclick="closeModal()" style="background:#bbb;">रद्द करें</button>
+    </div>
+</div>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+    let pdfImageSrc = ""; 
+    let cropper;
+    let currentCropTarget = ""; 
+    let qrCodeInstance = null;
+
+    function updateCard() {
+        document.getElementById('cardName').innerText = document.getElementById('inName').value;
+        document.getElementById('cardDob').innerText = document.getElementById('inDob').value;
+        document.getElementById('cardGender').innerText = document.getElementById('inGender').value;
+        document.getElementById('cardMobile').innerText = document.getElementById('inMobile').value;
+        document.getElementById('cardAadhar').innerText = document.getElementById('inAadhar').value;
+        document.getElementById('cardFarmerId').innerText = document.getElementById('inFarmerId').value;
+        document.getElementById('cardAddress').innerText = document.getElementById('inAddress').value;
+        
+        generateAutoQR();
+    }
+
+    function generateAutoQR() {
+        const qrContainer = document.getElementById("cardQr");
+        qrContainer.innerHTML = ""; 
+        
+        const qrData = `Name: ${document.getElementById('inName').value}\nFarmerID: ${document.getElementById('inFarmerId').value}\nMobile: ${document.getElementById('inMobile').value}`;
+        
+        new QRCode(qrContainer, {
+            text: qrData,
+            width: 75,
+            height: 75,
+            correctLevel: QRCode.CorrectLevel.H
+        });
+    }
+
+    function processPDF(event) {
+        const file = event.target.files[0];
+        if (!file || file.type !== "application/pdf") return alert("कृपया केवल सही PDF फाइल ही चुनें!");
+
+        const fileReader = new FileReader();
+        fileReader.onload = function() {
+            const typedarray = new Uint8Array(this.result);
+            pdfjsLib.getDocument(typedarray).promise.then(function(pdf) {
+                pdf.getPage(1).then(function(page) {
+                    const viewport = page.getViewport({ scale: 2.0 }); 
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+
+                    const renderContext = { canvasContext: ctx, viewport: viewport };
+                    page.render(renderContext).promise.then(function() {
+                        pdfImageSrc = canvas.toDataURL('image/jpeg');
+                        alert("PDF सफलतापूर्वक लोड हो गया है! अब आप फोटो या खेत का विवरण क्रॉप कर सकते हैं।");
+                    });
+                });
+            });
+        };
+        fileReader.readAsArrayBuffer(file);
+    }
+
+    function openCropModal(target) {
+        if (!pdfImageSrc) return alert("कृपया पहले एक PDF फाइल अपलोड करें!");
+        currentCropTarget = target;
+        
+        const modal = document.getElementById('cropModal');
+        const image = document.getElementById('imageToCrop');
+        image.src = pdfImageSrc;
+        
+        modal.style.display = 'flex';
+
+        if (cropper) cropper.destroy();
+
+        const aspectRatio = (target === 'photo') ? 105 / 130 : NaN; 
+
+        cropper = new Cropper(image, {
+            aspectRatio: aspectRatio,
+            viewMode: 1,
+            autoCropArea: 0.8
+        });
+    }
+
+    function closeModal() {
+        document.getElementById('cropModal').style.display = 'none';
+        if (cropper) cropper.destroy();
+    }
+
+    function saveCrop() {
+        if (!cropper) return;
+        
+        const canvas = cropper.getCroppedCanvas();
+        const croppedImgSrc = canvas.toDataURL('image/jpeg');
+
+        if (currentCropTarget === 'photo') {
+            document.getElementById('cardPhoto').src = croppedImgSrc;
+        } else if (currentCropTarget === 'land') {
+            document.getElementById('cardLandDetails').src = croppedImgSrc;
+        }
+
+        closeModal();
+    }
+
+    function downloadBothSides() {
+        const farmerName = document.getElementById('inName').value || 'Farmer';
+        
+        html2canvas(document.getElementById('frontCard'), { scale: 3, useCORS: true }).then(canvas => {
+            let link = document.createElement('a');
+            link.download = farmerName + '_Front_Card.jpg';
+            link.href = canvas.toDataURL('image/jpeg', 1.0);
+            link.click();
+        });
+
+        setTimeout(() => {
+            html2canvas(document.getElementById('backCard'), { scale: 3, useCORS: true }).then(canvas => {
+                let link = document.createElement('a');
+                link.download = farmerName + '_Back_Card.jpg';
+                link.href = canvas.toDataURL('image/jpeg', 1.0);
+                link.click();
+            });
+        }, 600);
+    }
+
+    window.onload = function() {
+        generateAutoQR();
+    };
+</script>
+
+</body>
+</html>
